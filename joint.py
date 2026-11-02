@@ -37,7 +37,7 @@ class Joint:
         self.limit = None
 
         self.default_motor_speed = 0.0
-        self.max_motor_force = 10000
+        self.max_motor_force = 1000000
 
         self.min_angle = None
         self.max_angle = None

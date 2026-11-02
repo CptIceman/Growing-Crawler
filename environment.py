@@ -25,10 +25,11 @@ class GrowingCrawlerEnv(gym.Env):
             dtype=np.float32
         )
 
+        self.num_joints = 5 
+       
         self.action_space = spaces.Box(
-            low=-2.0,
-            high=2.0,
-            shape=(1,),
+            low=-6.0, high=6.0, 
+            shape=(self.num_joints,), 
             dtype=np.float32
         )
 
@@ -60,28 +61,34 @@ class GrowingCrawlerEnv(gym.Env):
             action = self._get_manual_action()
 
         self.body.apply_action(action)
+
+        x_before = self.body.center_of_mass()[0]
         self.body.step()
+        x_after = self.body.center_of_mass()[0]
+
+        reward = float(x_after - x_before)
 
         obs = self._get_obs()
 
         if self.render_mode == "human":
             self.render()
 
-        return obs, 0.0, False, False, {}
+        return obs, reward, False, False, {}
 
     def _get_manual_action(self):
         pygame.event.pump()
-
-        action = np.zeros(self.action_space.shape, dtype=np.float32)
-
         keys = pygame.key.get_pressed()
 
-
+        direction = 0
         if keys[pygame.K_a]:
-            action[0] = -2.0
+            direction = -1
 
         if keys[pygame.K_d]:
-            action[0] = 2.0
+            direction = 1
+
+        action = np.zeros(self.action_space.shape, dtype=np.float32)    
+        action[0::2] = 6.0 * direction
+        action[1::2] = -6.0 * direction
 
         return action
 

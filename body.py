@@ -4,7 +4,7 @@ from joint import Joint
 from segment import Segment
 
 class Body:
-    def __init__(self, gravity=(0, -900), num_segments=4):
+    def __init__(self, gravity=(0, -900), num_segments=6):
         self.space = pymunk.Space()
         self.space.gravity = gravity
 
@@ -38,8 +38,9 @@ class Body:
             body.position = (pos_x, pos_y)
 
             shape = pymunk.Poly.create_box(body, (width, height))
-            shape.friction = 0.8
+            shape.friction = 0.4
             shape.elasticity = 0.2
+            shape.filter = pymunk.ShapeFilter(group=1)
 
             self.space.add(body, shape)
             
@@ -60,6 +61,7 @@ class Body:
                 anchor_a=anchor_a,
                 anchor_b=anchor_b
             )
+            joint.set_limits(-0.8, 0.8)
             joint.initialize(self.space)
             self.joints.append(joint)
 
