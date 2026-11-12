@@ -3,6 +3,18 @@ import pymunk
 from joint import Joint
 from segment import Segment
 
+# Ground runs from -GROUND_HALF_LENGTH to +GROUND_HALF_LENGTH. A good gait covers
+# ~800 units per 500-step episode, so this must stay far beyond reach.
+GROUND_HALF_LENGTH = 100_000
+
+# Inchworm body parameters.
+SEGMENT_FRICTION = 0.2   # low: forward sliding is easy, the bristles provide the grip
+JOINT_LIMIT = 0.6        # max bend per joint (rad), so the body can't fold sharply
+MAX_TOTAL_BEND = 1.0     # max head-to-tail relative angle (rad); a ball needs ~2.5
+# Bristles (setae): fraction of backward velocity removed from grounded segments
+# after each physics step. 1.0 = perfect ratchet, 0.0 = no bristles.
+BRISTLE_GRIP = 1.0
+
 class Body:
     def __init__(self, gravity=(0, -900), num_segments=6):
         self.space = pymunk.Space()
@@ -16,10 +28,13 @@ class Body:
         self._create_worm(num_segments=num_segments)
 
     def _create_ground(self):
-        ground = pymunk.Segment(self.space.static_body, (-1000, 50), (1000, 50), 5)
+        ground = pymunk.Segment(
+            self.space.static_body, (-GROUND_HALF_LENGTH, 50), (GROUND_HALF_LENGTH, 50), 5
+        )
         ground.friction = 1.0
         ground.elasticity = 0.1
         self.space.add(ground)
+        self.ground = ground
 
     def _create_worm(self, num_segments, start_pos=(200, 300), width=40, height=10, mass=1.0):
         """
@@ -38,7 +53,7 @@ class Body:
             body.position = (pos_x, pos_y)
 
             shape = pymunk.Poly.create_box(body, (width, height))
-            shape.friction = 0.4
+            shape.friction = SEGMENT_FRICTION
             shape.elasticity = 0.2
             shape.filter = pymunk.ShapeFilter(group=1)
 
@@ -61,12 +76,47 @@ class Body:
                 anchor_a=anchor_a,
                 anchor_b=anchor_b
             )
-            joint.set_limits(-0.8, 0.8)
+            joint.set_limits(-JOINT_LIMIT, JOINT_LIMIT)
             joint.initialize(self.space)
             self.joints.append(joint)
 
+        # Ball blocker: the total bend (sum of joint angles) equals the tail's angle
+        # minus the head's, so limiting head vs tail stops the body curling up while
+        # still allowing an arch (which bends up and back down, summing to ~0).
+        self.bend_limit = pymunk.RotaryLimitJoint(
+            self.segments[0].body, self.segments[-1].body, -MAX_TOTAL_BEND, MAX_TOTAL_BEND
+        )
+        self.space.add(self.bend_limit)
+
     def step(self, dt=1 / 60.0):
         self.space.step(dt)
+        self._apply_bristles()
+
+    def is_grounded(self, segment):
+        """Returns True if the segment is touching the ground this step."""
+        touching = False
+
+        def check(arbiter):
+            nonlocal touching
+            if self.ground in arbiter.shapes:
+                touching = True
+
+        segment.body.each_arbiter(check)
+        return touching
+
+    def ground_contacts(self):
+        return [self.is_grounded(segment) for segment in self.segments]
+
+    def _apply_bristles(self):
+        """One-way grip: grounded segments can slide forward but not backward.
+
+        pymunk only has direction-independent friction, so this edits velocity
+        directly, which is a common game-physics shortcut, not real contact physics.
+        """
+        for segment in self.segments:
+            vx, vy = segment.body.velocity
+            if vx < 0 and self.is_grounded(segment):
+                segment.body.velocity = (vx * (1.0 - BRISTLE_GRIP), vy)
 
     def get_segment_positions(self):
         return [

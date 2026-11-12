@@ -71,15 +71,16 @@ class Segment:
             for vertex in local_vertices
         ]
 
-    def draw(self, screen, screen_height):
+    def draw(self, screen, screen_height, camera_x=0.0):
         """Draws the segment.
 
         Args:
             screen: Pygame display surface.
             screen_height: Window height.
+            camera_x: World x coordinate shown at the left edge of the screen.
         """
         vertices = [
-            (vertex.x, screen_height - vertex.y)
+            (vertex.x - camera_x, screen_height - vertex.y)
             for vertex in self.get_vertices()
         ]
 
